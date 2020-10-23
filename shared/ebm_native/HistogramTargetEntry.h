@@ -115,12 +115,12 @@ struct HistogramBucketVectorEntry<false> final : HistogramBucketVectorEntryBase 
    FloatEbmType m_sumResidualError;
 
    INLINE_ALWAYS FloatEbmType GetSumDenominator() const {
-      EBM_ASSERT(false); // this should never be called, but the compiler seems to want it to exist
+      //EBM_ASSERT(false); // this should never be called, but the compiler seems to want it to exist
       return FloatEbmType { 0 };
    }
    INLINE_ALWAYS void SetSumDenominator(FloatEbmType sumDenominator) {
       UNUSED(sumDenominator);
-      EBM_ASSERT(false); // this should never be called, but the compiler seems to want it to exist
+      //EBM_ASSERT(false); // this should never be called, but the compiler seems to want it to exist
    }
    INLINE_ALWAYS void Add(const HistogramBucketVectorEntry<false> & other) {
       m_sumResidualError += other.m_sumResidualError;

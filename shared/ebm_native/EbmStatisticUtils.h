@@ -369,6 +369,9 @@ public:
       return ret;
    }
 
+   WARNING_PUSH
+   WARNING_DISABLE_POTENTIAL_DIVIDE_BY_ZERO
+
    INLINE_ALWAYS static FloatEbmType ComputeNodeSplittingScore(const FloatEbmType sumResidualError, const FloatEbmType cSamples) {
       // this function can SOMETIMES be performance critical as it's called on every histogram bin
       // it will only be performance critical for truely continous numerical features that we're not binning, or for interactions where dimensionality
@@ -431,6 +434,9 @@ public:
       EBM_ASSERT(std::isnan(sumResidualError) || FloatEbmType { 0 } <= ret);
       return ret;
    }
+
+   WARNING_POP
+
 
    WARNING_PUSH
    WARNING_DISABLE_POTENTIAL_DIVIDE_BY_ZERO

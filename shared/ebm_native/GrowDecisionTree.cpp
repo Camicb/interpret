@@ -115,11 +115,15 @@ static bool ExamineNodeForPossibleFutureSplittingAndDetermineBestSplitPoint(
       aSumHistogramBucketVectorEntryLeft[i].Zero();
    }
 
+   FloatEbmType aSumDenominatorsRight[1000]; // TODO WARNING THIS WILL CRASH!!!!
    FloatEbmType * const aSumResidualErrorsRight = pCachedThreadResources->GetTempFloatVector();
    const HistogramBucketVectorEntry<bClassification> * pHistogramBucketVectorEntryInit = 
       pTreeNode->GetHistogramBucketVectorEntry();
    for(size_t iVector = 0; iVector < cVectorLength; ++iVector) {
       aSumResidualErrorsRight[iVector] = pHistogramBucketVectorEntryInit[iVector].m_sumResidualError;
+      if(bClassification) {
+         aSumDenominatorsRight[iVector] = pHistogramBucketVectorEntryInit[iVector].GetSumDenominator();
+      }
    }
 
    const HistogramBucket<bClassification> * pHistogramBucketEntryCur =
@@ -180,30 +184,39 @@ static bool ExamineNodeForPossibleFutureSplittingAndDetermineBestSplitPoint(
 
          for(size_t iVector = 0; iVector < cVectorLength; ++iVector) {
             const FloatEbmType CHANGE_sumResidualError = pHistogramBucketVectorEntry[iVector].m_sumResidualError;
+            const FloatEbmType CHANGE_denominator = pHistogramBucketVectorEntry[iVector].GetSumDenominator();
 
             const FloatEbmType sumResidualErrorRight = aSumResidualErrorsRight[iVector] - CHANGE_sumResidualError;
             aSumResidualErrorsRight[iVector] = sumResidualErrorRight;
 
+            const FloatEbmType sumDenominatorRight = aSumDenominatorsRight[iVector] - CHANGE_denominator;
+            aSumDenominatorsRight[iVector] = sumDenominatorRight;
+
             // TODO : we can make this faster by doing the division in ComputeNodeSplittingScore after we add all the numerators 
             // (but only do this after we've determined the best node splitting score for classification, and the NewtonRaphsonStep for gain
-            const FloatEbmType nodeSplittingScoreRight = EbmStatistics::ComputeNodeSplittingScore(sumResidualErrorRight, cSamplesRightFloatEbmType);
+            const FloatEbmType nodeSplittingScoreRight = EbmStatistics::ComputeNodeSplittingScore(sumResidualErrorRight, bClassification ? sumDenominatorRight : cSamplesRightFloatEbmType);
             EBM_ASSERT(std::isnan(nodeSplittingScoreRight) || FloatEbmType { 0 } <= nodeSplittingScoreRight);
             nodeSplittingScore += nodeSplittingScoreRight;
 
             const FloatEbmType sumResidualErrorLeft = aSumHistogramBucketVectorEntryLeft[iVector].m_sumResidualError + CHANGE_sumResidualError;
             aSumHistogramBucketVectorEntryLeft[iVector].m_sumResidualError = sumResidualErrorLeft;
 
+            const FloatEbmType sumDenonminatorLeft = aSumHistogramBucketVectorEntryLeft[iVector].GetSumDenominator() + CHANGE_denominator;
+            aSumHistogramBucketVectorEntryLeft[iVector].SetSumDenominator(sumDenonminatorLeft);
+
             // TODO : we can make this faster by doing the division in ComputeNodeSplittingScore after we add all the numerators 
             // (but only do this after we've determined the best node splitting score for classification, and the NewtonRaphsonStep for gain
-            const FloatEbmType nodeSplittingScoreLeft = EbmStatistics::ComputeNodeSplittingScore(sumResidualErrorLeft, cSamplesLeftFloatEbmType);
+            const FloatEbmType nodeSplittingScoreLeft = EbmStatistics::ComputeNodeSplittingScore(sumResidualErrorLeft, bClassification ? sumDenonminatorLeft : cSamplesLeftFloatEbmType);
             EBM_ASSERT(std::isnan(nodeSplittingScoreLeft) || FloatEbmType { 0 } <= nodeSplittingScoreLeft);
             nodeSplittingScore += nodeSplittingScoreLeft;
 
             if(bClassification) {
-               aSumHistogramBucketVectorEntryLeft[iVector].SetSumDenominator(
-                  aSumHistogramBucketVectorEntryLeft[iVector].GetSumDenominator() +
-                  pHistogramBucketVectorEntry[iVector].GetSumDenominator()
-               );
+               // TODO: but we can substitute the stuff above for a histogram wide sum in the future
+
+               //aSumHistogramBucketVectorEntryLeft[iVector].SetSumDenominator(
+               //   aSumHistogramBucketVectorEntryLeft[iVector].GetSumDenominator() +
+               //   pHistogramBucketVectorEntry[iVector].GetSumDenominator()
+               //);
             }
          }
          EBM_ASSERT(std::isnan(nodeSplittingScore) || FloatEbmType { 0 } <= nodeSplittingScore);
@@ -257,10 +270,12 @@ static bool ExamineNodeForPossibleFutureSplittingAndDetermineBestSplitPoint(
             aSumResidualErrorsRight[iVector] -= CHANGE_sumResidualError;
             aSumHistogramBucketVectorEntryLeft[iVector].m_sumResidualError += CHANGE_sumResidualError;
             if(bClassification) {
+               const FloatEbmType CHANGE_denominator = pHistogramBucketVectorEntry[iVector].GetSumDenominator();
                aSumHistogramBucketVectorEntryLeft[iVector].SetSumDenominator(
                   aSumHistogramBucketVectorEntryLeft[iVector].GetSumDenominator() +
-                  pHistogramBucketVectorEntry[iVector].GetSumDenominator()
+                  CHANGE_denominator
                );
+               aSumDenominatorsRight[iVector] -= CHANGE_denominator;
             }
          }
       }
@@ -328,20 +343,23 @@ static bool ExamineNodeForPossibleFutureSplittingAndDetermineBestSplitPoint(
    for(size_t iVector = 0; iVector < cVectorLength; ++iVector) {
       const FloatEbmType BEST_sumResidualErrorLeft = pHistogramBucketVectorEntrySweep[iVector].m_sumResidualError;
       pHistogramBucketVectorEntryLeftChild[iVector].m_sumResidualError = BEST_sumResidualErrorLeft;
-
       const FloatEbmType sumResidualErrorParent = pHistogramBucketVectorEntryTreeNode[iVector].m_sumResidualError;
       pHistogramBucketVectorEntryRightChild[iVector].m_sumResidualError = sumResidualErrorParent - BEST_sumResidualErrorLeft;
 
-      const FloatEbmType originalParentScoreUpdate = EbmStatistics::ComputeNodeSplittingScore(sumResidualErrorParent, cSamplesParentFloatEbmType);
+
+      const FloatEbmType BEST_sumDenominatorLeft = pHistogramBucketVectorEntrySweep[iVector].GetSumDenominator();
+      pHistogramBucketVectorEntryLeftChild[iVector].SetSumDenominator(BEST_sumDenominatorLeft);
+      const FloatEbmType sumDenominatorParent = pHistogramBucketVectorEntryTreeNode[iVector].GetSumDenominator();
+      pHistogramBucketVectorEntryRightChild[iVector].SetSumDenominator(
+         sumDenominatorParent - BEST_sumDenominatorLeft
+      );
+
+      const FloatEbmType originalParentScoreUpdate = EbmStatistics::ComputeNodeSplittingScore(sumResidualErrorParent, bClassification ? sumDenominatorParent : cSamplesParentFloatEbmType);
       EBM_ASSERT(std::isnan(originalParentScoreUpdate) || FloatEbmType { 0 } <= originalParentScoreUpdate);
       originalParentScore += originalParentScoreUpdate;
 
       if(bClassification) {
-         const FloatEbmType BEST_sumDenominatorLeft = pHistogramBucketVectorEntrySweep[iVector].GetSumDenominator();
-         pHistogramBucketVectorEntryLeftChild[iVector].SetSumDenominator(BEST_sumDenominatorLeft);
-         pHistogramBucketVectorEntryRightChild[iVector].SetSumDenominator(
-            pHistogramBucketVectorEntryTreeNode[iVector].GetSumDenominator() - BEST_sumDenominatorLeft
-         );
+         // TODO WE STILL ONLY NEED TO DO THIS WORK ON CLASSIFICATION, BUT I've moved it out for now during testing
       }
    }
    EBM_ASSERT(std::isnan(originalParentScore) || FloatEbmType { 0 } <= originalParentScore);

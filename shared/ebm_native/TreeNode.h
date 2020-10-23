@@ -36,6 +36,8 @@ struct TreeNodeData<true> {
 
       const HistogramBucket<true> * m_pHistogramBucketEntryFirst;
       const HistogramBucket<true> * m_pHistogramBucketEntryLast;
+      // TODO if we use Newton-Raphson in the gain calculation, we might not need to store m_cSamples anymore
+      // since we'll have the denominator sum in m_aHistogramBucketVectorEntry
       size_t m_cSamples;
    };
    static_assert(std::is_standard_layout<BeforeExaminationForPossibleSplitting>::value,
